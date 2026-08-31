@@ -2,7 +2,6 @@
 
 Este proyecto presenta un tablero analítico e interactivo desarrollado en **R** utilizando `flexdashboard`, `tidyverse`, `plotly` y `crosstalk`. Su objetivo principal es explorar, filtrar y visualizar las principales dinámicas del catálogo histórico de la plataforma de streaming Netflix (películas y series) bajo un enfoque de ciencia de datos y visualización ejecutiva.
 
-🌐 **[Ver Tablero en Vivo (GitHub Pages)](https://tu-usuario.github.io/nombre-repositorio/)** *(Recuerda reemplazar con tu enlace web real)*
 
 ---
 
