@@ -1,0 +1,210 @@
+---
+title: "Dashboard de Catálogo de Netflix"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    theme: flatly
+    
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(plotly)
+library(DT)
+
+# Carga y lectura del dataset
+ruta_archivo <- "C:/Users/dockn/Documents/Ejercicios Maestria Ciencia de datos/R - Netflix/netflix_titles.csv"
+df_netflix <- read_csv(ruta_archivo, show_col_types = FALSE)
+
+# Limpieza y preprocesamiento de datos
+df_clean <- df_netflix %>%
+  filter(!is.na(title), !is.na(release_year)) %>%
+  mutate(
+    type = as.factor(type),
+    release_year = as.numeric(release_year),
+    rating = as.factor(rating),
+    # Traducimos "Movie" y "TV Show" al español para los gráficos y la tabla
+    type = recode(type, "Movie" = "Película", "TV Show" = "Serie")
+  )
+
+# 1. Transformación para el gráfico temporal
+df_yearly <- df_clean %>%
+  count(release_year, type) %>%
+  filter(release_year >= 2000)
+
+# 2. Transformación para países
+df_countries <- df_clean %>%
+  mutate(country = str_split(country, ",")) %>%
+  unnest(country) %>%
+  mutate(country = str_trim(country)) %>%
+  filter(country != "N/A", !is.na(country)) %>%
+  count(country, sort = TRUE) %>%
+  head(10)
+
+# 3. Transformación y etiquetado claro para clasificaciones de edad (Rating)
+df_rating <- df_clean %>%
+  mutate(rating_desc = case_when(
+    rating %in% c("TV-MA", "R", "NC-17") ~ paste0(rating, " (Adultos / 18+)"),
+    rating %in% c("TV-14", "PG-13") ~ paste0(rating, " (Mayores de 13)"),
+    rating %in% c("PG", "TV-PG") ~ paste0(rating, " (Guía Parental)"),
+    rating %in% c("G", "TV-G", "TV-Y", "TV-Y7", "TV-Y7-FV") ~ paste0(rating, " (Infantil / Todo Público)"),
+    TRUE ~ paste0(as.character(rating), " (Otro)")
+  )) %>%
+  count(rating_desc, sort = TRUE) %>%
+  head(8)
+
+# 4. Transformaciones para los géneros (Global, Películas y Series)
+df_genres_global <- df_clean %>%
+  mutate(listed_in = str_split(listed_in, ",")) %>%
+  unnest(listed_in) %>%
+  mutate(listed_in = str_trim(listed_in)) %>%
+  filter(!is.na(listed_in)) %>%
+  count(listed_in, sort = TRUE) %>%
+  head(10)
+
+df_genres_movies <- df_clean %>%
+  filter(type == "Película") %>%
+  mutate(listed_in = str_split(listed_in, ",")) %>%
+  unnest(listed_in) %>%
+  mutate(listed_in = str_trim(listed_in)) %>%
+  filter(!is.na(listed_in)) %>%
+  count(listed_in, sort = TRUE) %>%
+  head(10)
+
+df_genres_shows <- df_clean %>%
+  filter(type == "Serie") %>%
+  mutate(listed_in = str_split(listed_in, ",")) %>%
+  unnest(listed_in) %>%
+  mutate(listed_in = str_trim(listed_in)) %>%
+  filter(!is.na(listed_in)) %>%
+  count(listed_in, sort = TRUE) %>%
+  head(10)
+```
+
+Column {data-width=65%}
+-----------------------------------------------------------------------
+
+### Evolución de Títulos Estrenados por Año (Películas vs Series)
+```{r}
+p1 <- ggplot(df_yearly, aes(x = release_year, y = n, color = type)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(x = "Año de Estreno", y = "Cantidad de Títulos", color = "Tipo") +
+  scale_color_manual(values = c("#E50914", "#221F1F"))
+
+ggplotly(p1, tooltip = c("x", "y", "colour")) %>%
+  config(displayModeBar = FALSE)
+```
+
+### Top 10 Países con Mayor Producción de Contenido
+```{r}
+p2 <- ggplot(df_countries, aes(x = reorder(country, n), y = n, fill = n)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "País", y = "Total de Títulos") +
+  scale_fill_gradient(low = "#ff9999", high = "#E50914") +
+  theme(legend.position = "none")
+
+ggplotly(p2)
+```
+
+Column {data-width=35%}
+-----------------------------------------------------------------------
+
+### Distribución por Clasificación de Edad (Rating)
+```{r}
+p3 <- ggplot(df_rating, aes(x = reorder(rating_desc, n), y = n)) +
+  geom_col(fill = "#E50914") +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    x = "Clasificación y Audiencia", 
+    y = "Total de Títulos",
+    caption = "* TV-MA/R: Adultos | TV-14: +13 años | TV-Y/G: Infantil"
+  ) +
+  theme(
+    axis.text.y = element_text(size = 9),
+    plot.caption = element_text(size = 8, color = "gray40", face = "italic")
+  )
+
+ggplotly(p3, tooltip = c("x", "y"))
+```
+
+
+### Distribución por Género
+```{r}
+df_genres_global <- df_clean %>%
+  mutate(listed_in = str_split(listed_in, ",")) %>%
+  unnest(listed_in) %>%
+  mutate(listed_in = str_trim(listed_in)) %>%
+  filter(!is.na(listed_in)) %>%
+  count(listed_in, sort = TRUE) %>%
+  head(10)
+
+p_g1 <- ggplot(df_genres_global, aes(x = reorder(listed_in, n), y = n)) +
+  geom_col(fill = "#E50914") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "Género", y = "Total de Títulos")
+
+ggplotly(p_g1)
+```
+
+
+```{r}
+df_genres_movies <- df_clean %>%
+  filter(type == "Película") %>%
+  mutate(listed_in = str_split(listed_in, ",")) %>%
+  unnest(listed_in) %>%
+  mutate(listed_in = str_trim(listed_in)) %>%
+  filter(!is.na(listed_in)) %>%
+  count(listed_in, sort = TRUE) %>%
+  head(10)
+
+p_g2 <- ggplot(df_genres_movies, aes(x = reorder(listed_in, n), y = n)) +
+  geom_col(fill = "#E50914") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "Género", y = "Total de Películas")
+
+ggplotly(p_g2)
+```
+
+```{r}
+df_genres_shows <- df_clean %>%
+  filter(type == "Serie") %>%
+  mutate(listed_in = str_split(listed_in, ",")) %>%
+  unnest(listed_in) %>%
+  mutate(listed_in = str_trim(listed_in)) %>%
+  filter(!is.na(listed_in)) %>%
+  count(listed_in, sort = TRUE) %>%
+  head(10)
+
+p_g3 <- ggplot(df_genres_shows, aes(x = reorder(listed_in, n), y = n)) +
+  geom_col(fill = "#221F1F") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "Género", y = "Total de Series")
+
+ggplotly(p_g3)
+
+```
+
+
+Column {data-width=35%}
+-----------------------------------------------------------------------
+
+### 📊 Hallazgos Analíticos y Conclusiones del Catálogo de Netflix
+
+
+***Crecimiento Exponencial:** Se observa un incremento masivo en las producciones a partir de 2015, impulsado principalmente por el formato de **Películas**, seguido de una consolidación importante de las **Series** tras la pandemia.
+* **Dominio Geográfico:** **Estados Unidos e India** lideran de forma absoluta la producción global de contenido en la plataforma, reflejando tanto la industria de Hollywood como la potencia de Bollywood.
+* **Clasificación de Audiencia:** El catálogo está predominantemente enfocado en un público adulto o maduro (*TV-MA* y *TV-14* ocupan los primeros lugares), lo que indica una estrategia de contenidos orientada a audiencias jóvenes y adultas.
+* **Tendencias de Género:** Los géneros de *International Movies* y *Dramas* lideran las preferencias del catálogo global, destacando la internacionalización de las producciones de Netflix.
+
+
+
